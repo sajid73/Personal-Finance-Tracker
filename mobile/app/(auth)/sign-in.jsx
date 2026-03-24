@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useSignIn } from '@clerk/expo'
+import { useSignIn, useAuth } from '@clerk/expo'
 import { Link, useRouter } from 'expo-router'
+import { useState } from 'react'
 import { Text, TextInput, TouchableOpacity, View, Image } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { styles } from "../../assets/styles/auth.styles";
@@ -8,41 +8,39 @@ import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../constants/colors";
 
 export default function Page() {
-  const { signIn, setActive, isLoaded } = useSignIn()
+  const { signIn, errors, fetchStatus } = useSignIn()
+  const { isSignedIn } = useAuth()
   const router = useRouter()
 
   const [emailAddress, setEmailAddress] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState("");
 
   const onSignInPress = async () => {
-    if (!isLoaded) return;
+    const { error } = await signIn.password({
+      identifier: emailAddress,
+      password,
+    })
 
-    // Start the sign-in process using the email and password provided
-    try {
-      const signInAttempt = await signIn.create({
-        identifier: emailAddress,
-        password,
-      });
-
-      // If sign-in process is complete, set the created session as active
-      // and redirect the user
-      if (signInAttempt.status === "complete") {
-        await setActive({ session: signInAttempt.createdSessionId });
-        router.replace("/");
-      } else {
-        // If the status isn't complete, check why. User might need to
-        // complete further steps.
-        console.error(JSON.stringify(signInAttempt, null, 2));
-      }
-    } catch (err) {
-      if (err.errors?.[0]?.code === "form_password_incorrect") {
-        setError("Password is incorrect. Please try again.");
-      } else {
-        setError("An error occurred. Please try again.");
-      }
+    if (error) {
+      console.error(JSON.stringify(error, null, 2))
+      return
     }
-  };
+
+    await signIn.finalize({
+      navigate: ({ session, decorateUrl }) => {
+        if (session?.currentTask) {
+          console.log(session?.currentTask)
+          return
+        }
+        router.replace('/')
+      },
+    })
+  }
+
+  // Already signed in — render nothing
+  if (isSignedIn) {
+    return null
+  }
 
   return (
     <KeyboardAwareScrollView
@@ -50,32 +48,38 @@ export default function Page() {
       contentContainerStyle={{ flexGrow: 1 }}
       enableOnAndroid={true}
       enableAutomaticScroll={true}
-      extraScrollHeight={30}>
+      extraScrollHeight={30}
+    >
       <View style={styles.container}>
         <Image source={require("../../assets/images/revenue-i4.png")} style={styles.illustration} />
         <Text style={styles.title}>Welcome Back</Text>
 
-        {error ? (
+        {errors.fields.identifier ? (
           <View style={styles.errorBox}>
             <Ionicons name="alert-circle" size={20} color={COLORS.expense} />
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity onPress={() => setError("")}>
-              <Ionicons name="close" size={20} color={COLORS.textLight} />
-            </TouchableOpacity>
+            <Text style={styles.errorText}>{errors.fields.identifier.message}</Text>
+          </View>
+        ) : null}
+
+        {errors.fields.password ? (
+          <View style={styles.errorBox}>
+            <Ionicons name="alert-circle" size={20} color={COLORS.expense} />
+            <Text style={styles.errorText}>{errors.fields.password.message}</Text>
           </View>
         ) : null}
 
         <TextInput
-          style={[styles.input, error && styles.errorInput]}
+          style={[styles.input, errors.fields.identifier && styles.errorInput]}
           autoCapitalize="none"
           value={emailAddress}
           placeholder="Enter email"
           placeholderTextColor="#4FC3F7"
           onChangeText={(emailAddress) => setEmailAddress(emailAddress)}
+          keyboardType="email-address"
         />
 
         <TextInput
-          style={[styles.input, error && styles.errorInput]}
+          style={[styles.input, errors.fields.password && styles.errorInput]}
           value={password}
           placeholder="Enter password"
           placeholderTextColor="#4FC3F7"
@@ -83,13 +87,16 @@ export default function Page() {
           onChangeText={(password) => setPassword(password)}
         />
 
-        <TouchableOpacity style={styles.button} onPress={onSignInPress}>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={onSignInPress}
+          disabled={!emailAddress || !password || fetchStatus === 'fetching'}
+        >
           <Text style={styles.buttonText}>Sign In</Text>
         </TouchableOpacity>
 
         <View style={styles.footerContainer}>
           <Text style={styles.footerText}>Don&apos;t have an account?</Text>
-
           <Link href="/(auth)/sign-up" asChild>
             <TouchableOpacity>
               <Text style={styles.linkText}>Sign up</Text>
