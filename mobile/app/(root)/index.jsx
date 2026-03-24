@@ -16,9 +16,6 @@ export default function Page() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
-  console.log(user);
-  console.log(user.id);
-
   const { transactions, summary, isLoading, loadData, deleteTransaction } = useTransactions(
     user.id
   );
