@@ -1,0 +1,1 @@
+export const API_URL = "https://personal-finance-tracker-pp1e.onrender.com/api";
